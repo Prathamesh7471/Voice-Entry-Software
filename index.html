@@ -1,0 +1,370 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>Voice Based Data Entry</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f1f4f9;
+    margin: 0;
+    padding: 15px;
+}
+
+.container {
+    width: 100%;
+    max-width: 500px;
+    margin: 30px auto;
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+h2 {
+    text-align: center;
+    color: #263445;
+}
+
+label {
+    display: block;
+    font-weight: bold;
+    margin-top: 15px;
+    margin-bottom: 6px;
+}
+
+input {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 7px;
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 25px;
+}
+
+button {
+    width: 100%;
+    padding: 15px;
+    font-size: 17px;
+    font-weight: bold;
+    border: none;
+    border-radius: 7px;
+    color: white;
+    cursor: pointer;
+}
+
+.start-btn {
+    background: #16a34a;
+}
+
+.stop-btn {
+    background: #dc2626;
+}
+
+.submit-btn {
+    background: #2563eb;
+}
+
+#status {
+    text-align: center;
+    color: #2563eb;
+    font-weight: bold;
+    margin-top: 20px;
+    overflow-wrap: anywhere;
+}
+
+@media(max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        margin: 15px auto;
+        padding: 20px;
+    }
+
+    h2 {
+        font-size: 22px;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Voice Based Data Entry</h2>
+
+<form id="entryForm">
+
+    <label>Name:</label>
+    <input type="text" id="name"
+           placeholder="Enter name">
+
+    <label>Age:</label>
+    <input type="number" id="age"
+           placeholder="Enter age">
+
+    <label>City:</label>
+    <input type="text" id="city"
+           placeholder="Enter city">
+
+    <div class="button-group">
+
+        <button type="button"
+                class="start-btn"
+                onclick="startVoice()">
+            🎤 Start Voice
+        </button>
+
+        <button type="button"
+                class="stop-btn"
+                onclick="stopVoice()">
+            ⏹ Stop Voice
+        </button>
+
+        <button type="button"
+                class="submit-btn"
+                onclick="submitForm()">
+            Submit
+        </button>
+
+    </div>
+
+</form>
+
+<p id="status">Ready to start</p>
+
+</div>
+
+<script>
+
+let recognition;
+let isListening = false;
+let shouldSubmit = false;
+
+function startVoice() {
+
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        alert("Speech recognition is not supported in this browser.");
+        return;
+    }
+
+    if (isListening) return;
+
+    recognition = new SpeechRecognition();
+
+    recognition.lang = "en-IN";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onstart = function() {
+
+        isListening = true;
+
+        document.getElementById("status").innerText =
+            "Listening... Speak your details";
+
+    };
+
+    recognition.onresult = function(event) {
+
+        for (let i = event.resultIndex;
+             i < event.results.length; i++) {
+
+            if (!event.results[i].isFinal) continue;
+
+            let speech =
+                event.results[i][0].transcript.trim();
+
+            let command = speech.toLowerCase();
+
+            document.getElementById("status").innerText =
+                "Recognized: " + speech;
+
+            // STOP COMMAND
+
+            if (/\bstop voice\b/i.test(command)) {
+                stopVoice();
+                return;
+            }
+
+            // SUBMIT COMMAND
+
+            if (/\bsubmit\b/i.test(command)) {
+                submitForm();
+                return;
+            }
+
+            // NAME
+
+            let nameMatch = speech.match(
+                /name\s+(.+?)(?=\s*,?\s*(?:age|city)\b|$)/i
+            );
+
+            if (nameMatch) {
+                document.getElementById("name").value =
+                    nameMatch[1].trim();
+            }
+
+            // AGE
+
+            let ageMatch = speech.match(
+                /age\s+(\d+)/i
+            );
+
+            if (ageMatch) {
+                document.getElementById("age").value =
+                    ageMatch[1];
+            }
+
+            // CITY
+
+            let cityMatch = speech.match(
+                /city\s+(.+?)(?=\s*,?\s*(?:name|age)\b|$)/i
+            );
+
+            if (cityMatch) {
+                document.getElementById("city").value =
+                    cityMatch[1].trim();
+            }
+
+        }
+
+    };
+
+    recognition.onerror = function(event) {
+
+        isListening = false;
+
+        document.getElementById("status").innerText =
+            "Error: " + event.error;
+
+        if (shouldSubmit) {
+            shouldSubmit = false;
+        }
+
+    };
+
+    recognition.onend = function() {
+
+        isListening = false;
+
+        if (shouldSubmit) {
+
+            shouldSubmit = false;
+            showFormData();
+
+        } else {
+
+            document.getElementById("status").innerText =
+                "Voice recognition stopped.";
+
+        }
+
+    };
+
+    try {
+        recognition.start();
+    } catch(error) {
+        document.getElementById("status").innerText =
+            "Unable to start voice recognition.";
+    }
+
+}
+
+
+// STOP VOICE
+
+function stopVoice() {
+
+    if (recognition && isListening) {
+
+        recognition.stop();
+
+        document.getElementById("status").innerText =
+            "Voice stopped successfully.";
+
+    } else {
+
+        document.getElementById("status").innerText =
+            "Voice is not active.";
+
+    }
+
+}
+
+
+// SUBMIT FORM
+
+function submitForm() {
+
+    if (shouldSubmit) return;
+
+    if (recognition && isListening) {
+
+        shouldSubmit = true;
+        recognition.stop();
+
+    } else {
+
+        showFormData();
+
+    }
+
+}
+
+
+// DISPLAY FORM DATA
+
+function showFormData() {
+
+    let name =
+        document.getElementById("name").value;
+
+    let age =
+        document.getElementById("age").value;
+
+    let city =
+        document.getElementById("city").value;
+
+    alert(
+        "Form Submitted Successfully!\n\n" +
+        "Name: " + name + "\n" +
+        "Age: " + age + "\n" +
+        "City: " + city
+    );
+
+    document.getElementById("status").innerText =
+        "Form submitted successfully.";
+
+}
+
+</script>
+
+</body>
+</html>
